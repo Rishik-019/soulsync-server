@@ -6,17 +6,15 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001; // USE process.env.PORT FOR RENDER
 
 app.use(cors());
 app.use(express.json());
 
-// 🟢 Test
 app.get("/", (req, res) => {
   res.send("✅ SoulSync server is running...");
 });
 
-// 🟢 Chat route using Groq (AI reply)
 app.post("/chat", async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: "Message required" });
@@ -47,13 +45,13 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// 🟢 ElevenLabs TTS
+// ElevenLabs TTS
 app.post("/speak", async (req, res) => {
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: "Text required" });
 
-    const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel voice
+    const VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
@@ -72,20 +70,20 @@ app.post("/speak", async (req, res) => {
       const errorData = await response.json();
       return res.status(400).json({ error: errorData });
     }
-
+    
+    // Use .buffer() to fix streaming issue on Render
+    const audioBuffer = await response.buffer();
     res.set({
       "Content-Type": "audio/mpeg",
       "Content-Disposition": 'inline; filename="speech.mp3"',
     });
-
-    response.body.pipe(res);
+    res.send(audioBuffer);
   } catch (error) {
     console.error("Speak error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// 🟢 Start
 app.listen(PORT, () => {
   console.log(`✅ Server running at http://localhost:${PORT}`);
 });
