@@ -4,86 +4,74 @@ import fetch from "node-fetch";
 import dotenv from "dotenv";
 
 dotenv.config();
-
 const app = express();
-const PORT = process.env.PORT || 3001; // USE process.env.PORT FOR RENDER
-
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("✅ SoulSync server is running...");
-});
-
+// ✅ AI Route
 app.post("/chat", async (req, res) => {
-  const { message } = req.body;
-  if (!message) return res.status(400).json({ error: "Message required" });
-
   try {
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const userMessage = req.body.message || "Hello";
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
         messages: [
-          { role: "system", content: "You are SoulSync, an empathetic AI therapist. Speak warmly, human-like, short but thoughtful." },
-          { role: "user", content: message },
+          { role: "system", content: "You are SoulSync, an empathetic AI therapist." },
+          { role: "user", content: userMessage },
         ],
       }),
     });
 
-    const data = await groqRes.json();
-    const reply = data.choices?.[0]?.message?.content || "I'm here with you.";
+    if (!response.ok) {
+      const err = await response.text();
+      console.error("Groq API error:", err);
+      return res.json({ reply: "I’m here with you." }); // fallback
+    }
 
-    res.json({ reply });
-  } catch (err) {
-    console.error("Groq error:", err);
-    res.status(500).json({ error: "AI request failed" });
+    const data = await response.json();
+    const aiReply = data.choices[0]?.message?.content || "I’m here with you.";
+    res.json({ reply: aiReply });
+  } catch (error) {
+    console.error("Error:", error);
+    res.json({ reply: "I’m here with you." });
   }
 });
 
-// ElevenLabs TTS
+// ✅ Voice route (optional)
 app.post("/speak", async (req, res) => {
   try {
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ error: "Text required" });
-
-    const VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
-
+    const text = req.body.text || "Hello from SoulSync";
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+      "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL",
       {
         method: "POST",
         headers: {
-          "Accept": "audio/mpeg",
-          "Content-Type": "application/json",
           "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text, model_id: "eleven_multilingual_v2" }),
+        body: JSON.stringify({ text }),
       }
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
-      return res.status(400).json({ error: errorData });
+      const err = await response.text();
+      console.error("ElevenLabs error:", err);
+      return res.status(400).send(err);
     }
-    
-    // Use .buffer() to fix streaming issue on Render
-    const audioBuffer = await response.buffer();
-    res.set({
-      "Content-Type": "audio/mpeg",
-      "Content-Disposition": 'inline; filename="speech.mp3"',
-    });
+
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
+    res.set({ "Content-Type": "audio/mpeg" });
     res.send(audioBuffer);
   } catch (error) {
-    console.error("Speak error:", error);
-    res.status(500).json({ error: "Server error" });
+    console.error("Voice error:", error);
+    res.status(500).send("Error generating voice");
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
-});
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`✅ SoulSync server live on port ${PORT}`));
